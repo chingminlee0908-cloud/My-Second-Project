@@ -132,7 +132,6 @@
         @media (max-width: 600px) { .form-row { flex-direction: column; gap: 20px; } .control-panel { flex-direction: column; } }
         #pdf-hidden { position: absolute; top: -9999px; }
         
-        /* Password Visibility Toggle */
         .pwd-toggle { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 0.9rem; color: var(--text-sub); display: flex; align-items: center; gap: 5px; }
     </style>
 </head>
@@ -216,7 +215,7 @@
                         <label>設定新密碼</label>
                         <input type="password" id="newPwdInput" class="neu-input neu-pressed">
                         <label class="pwd-toggle">
-                            <input type="checkbox" onchange="togglePwdVisibility(this)"> 👁️ 顯示密碼
+                            <input type="checkbox" onchange="togglePwdVisibility(this)"> 👁️ 顯示
                         </label>
                     </div>
                 </div>
@@ -242,7 +241,7 @@
                 </div>
                 <div class="form-row">
                     <div class="form-col"><label>售價 ($)</label><input type="number" id="pPrice" class="neu-input neu-pressed"></div>
-                    <div class="form-col"><label style="color:var(--info)">成本 ($)</label><input type="number" id="pCost" class="neu-input neu-pressed" placeholder="內部"></div>
+                    <div class="form-col" id="costInputGroup" style="display:none;"><label style="color:var(--info)">成本 ($)</label><input type="number" id="pCost" class="neu-input neu-pressed" placeholder="內部"></div>
                 </div>
                 <div class="form-row">
                     <div class="form-col">
@@ -277,7 +276,7 @@
     let appData = JSON.parse(localStorage.getItem('guFangData_Flat_V2')) || DEFAULT_DATA;
     let isInternalMode = false;
     
-    // 初始化密碼 (如果沒有設定過，預設 8888)
+    // 初始化密碼
     if (!localStorage.getItem('gf_internal_pwd')) {
         localStorage.setItem('gf_internal_pwd', '8888');
     }
@@ -307,8 +306,7 @@
     }
 
     function togglePwdVisibility(checkbox) {
-        const input = document.getElementById('newPwdInput');
-        input.type = checkbox.checked ? "text" : "password";
+        document.getElementById('newPwdInput').type = checkbox.checked ? "text" : "password";
     }
 
     function saveNewPassword() {
@@ -316,12 +314,8 @@
         const newPwd = document.getElementById('newPwdInput').value;
         const currentPwd = localStorage.getItem('gf_internal_pwd');
 
-        if (oldPwd !== currentPwd) {
-            alert("舊密碼錯誤！"); return;
-        }
-        if (!newPwd || newPwd.trim() === "") {
-            alert("新密碼不能為空！"); return;
-        }
+        if (oldPwd !== currentPwd) { alert("舊密碼錯誤！"); return; }
+        if (!newPwd || newPwd.trim() === "") { alert("新密碼不能為空！"); return; }
 
         localStorage.setItem('gf_internal_pwd', newPwd);
         alert("密碼更改成功！");
@@ -412,6 +406,10 @@
     function openProductModal() {
         ['pId','pName','pOutW','pInW','pPrice','pCost','sizeL','sizeW','sizeH','pDesc'].forEach(k=>document.getElementById(k).value='');
         document.getElementById('volDisplay').innerText='0'; resetPreview('prevImg'); resetPreview('prevCode');
+        
+        // Hide/Show Cost based on Mode
+        document.getElementById('costInputGroup').style.display = isInternalMode ? 'block' : 'none';
+
         const catSel = document.getElementById('pCat'); catSel.innerHTML='<option value="">請選擇</option>'+appData.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
         const currMain = document.getElementById('mainCatSelect').value; if(currMain!=='all') catSel.value=currMain;
         openModal('productModal');
