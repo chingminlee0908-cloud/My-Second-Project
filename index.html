@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>谷芳茶業產品總表</title>
+    <title>谷芳茶業產品總表 (雲端同步版)</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
     <style>
+        /* 原本的 CSS 樣式完全保留，不需要更動 */
         @font-face {
             font-family: 'jf-openhuninn';
             src: url('https://cdn.jsdelivr.net/gh/justfont/open-huninn-font@HEAD/font/jf-openhuninn-2.0.woff2') format('woff2');
@@ -133,12 +134,15 @@
         #pdf-hidden { position: absolute; top: -9999px; }
         
         .pwd-toggle { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 0.9rem; color: var(--text-sub); display: flex; align-items: center; gap: 5px; }
+        
+        /* 雲端狀態指示燈 */
+        #cloudStatus { position: fixed; bottom: 20px; right: 20px; background: rgba(0,0,0,0.7); color: #fff; padding: 8px 15px; border-radius: 20px; font-size: 12px; z-index: 999; display: none; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>谷芳茶業產品總表</h1>
+        <h1>谷芳茶業產品總表 (Cloud)</h1>
         <button class="btn-circle" onclick="openModal('settingsModal')" title="設定">
             <svg class="icon" viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
         </button>
@@ -159,8 +163,14 @@
             <span id="viewTitle" class="view-title">全部產品</span>
             <button class="btn-grad" onclick="openProductModal()"><span>＋</span> 新增商品</button>
         </div>
-        <div class="product-grid" id="productList"></div>
+        <div class="product-grid" id="productList">
+            <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-sub);">
+                正在連線雲端資料庫...
+            </div>
+        </div>
     </div>
+    
+    <div id="cloudStatus">資料同步中...</div>
 
     <div class="modal-overlay" id="settingsModal">
         <div class="modal-card">
@@ -271,17 +281,99 @@
         </table>
     </div>
 
-<script>
+<script type="module">
+    // ----------------------
+    // Firebase 連線設定區
+    // ----------------------
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyAFZfrS32tKFKEO3ZwAgv1Y2BQAj7W8K9Y",
+        authDomain: "my-second-project-db.firebaseapp.com",
+        projectId: "my-second-project-db",
+        storageBucket: "my-second-project-db.firebasestorage.app",
+        messagingSenderId: "183253772016",
+        appId: "1:183253772016:web:557c0d6a857e5fda3d8435",
+        measurementId: "G-1YT95SQRDF"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    // 我們將所有資料存在一個叫 'data' 的文件裡，放在 'store' 集合中
+    const docRef = doc(db, "store", "data");
+
+    // ----------------------
+    // 應用程式邏輯
+    // ----------------------
     const DEFAULT_DATA = { categories: [{ id: 'c1', name: '精選茶葉', products: [{ id: 'p1', name: '凍頂烏龍', outerWeight: 320, contentWeight: 300, unit: 'g', price: 1000, cost: 500, sizeL:10, sizeW:10, sizeH:20, volume:2000, desc:'嚴選高山烏龍，香氣濃郁。', img:'', barcode:'' }] }] };
-    let appData = JSON.parse(localStorage.getItem('guFangData_Flat_V2')) || DEFAULT_DATA;
+    
+    // 現在 appData 預設為空，等待雲端資料載入
+    let appData = DEFAULT_DATA;
     let isInternalMode = false;
     
-    // 初始化密碼
+    // 將原本的 localStorage 密碼保留 (密碼不需要雲端同步，每台裝置自己記住狀態)
     if (!localStorage.getItem('gf_internal_pwd')) {
         localStorage.setItem('gf_internal_pwd', '8888');
     }
 
-    function init() { renderSelects(); renderProducts(); }
+    // 1. 監聽雲端資料 (Realtime Sync)
+    // 只要雲端有變動，這裡就會自動執行，更新畫面
+    onSnapshot(docRef, (docSnap) => {
+        const statusEl = document.getElementById('cloudStatus');
+        if (docSnap.exists()) {
+            console.log("從雲端收到新資料！");
+            appData = docSnap.data();
+            renderSelects();
+            renderProducts();
+        } else {
+            console.log("雲端沒資料，寫入預設值...");
+            saveToCloud(DEFAULT_DATA); // 第一次使用，自動寫入預設值
+        }
+    });
+
+    // 2. 儲存到雲端 (取代原本的 saveAll)
+    async function saveToCloud(data) {
+        const statusEl = document.getElementById('cloudStatus');
+        statusEl.style.display = 'block';
+        statusEl.innerText = '正在儲存到雲端...';
+        
+        try {
+            await setDoc(docRef, data);
+            statusEl.innerText = '儲存成功！';
+            setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
+        } catch (e) {
+            console.error("儲存失敗: ", e);
+            statusEl.innerText = '儲存失敗！請檢查網路';
+            statusEl.style.backgroundColor = '#cc5a5a';
+        }
+    }
+
+    // 將核心功能掛載到 window，讓 HTML 的 onclick 可以呼叫
+    window.toggleInternalMode = toggleInternalMode;
+    window.openChangePwdModal = openChangePwdModal;
+    window.togglePwdVisibility = togglePwdVisibility;
+    window.saveNewPassword = saveNewPassword;
+    window.resetPassword = resetPassword;
+    window.filterChange = filterChange;
+    window.renderProducts = renderProducts;
+    window.toggleDesc = toggleDesc;
+    window.openModal = openModal;
+    window.closeModal = closeModal;
+    window.renderManageList = renderManageList;
+    window.addCategory = addCategory;
+    window.renameCat = renameCat;
+    window.delCat = delCat;
+    window.openProductModal = openProductModal;
+    window.editProd = editProd;
+    window.saveProduct = saveProduct;
+    window.delProd = delProd;
+    window.calcVol = calcVol;
+    window.preview = preview;
+    window.exportData = exportData;
+    window.importData = importData;
+    window.generatePDF = generatePDF;
+
 
     // --- Mode Logic ---
     function toggleInternalMode(checkbox) {
@@ -371,7 +463,7 @@
                 </div>`;
             });
         });
-        list.innerHTML = hasData ? html : `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-sub);">無資料</div>`;
+        list.innerHTML = hasData ? html : `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-sub);">無資料 (或正在讀取中...)</div>`;
     }
 
     function toggleDesc(btn) {
@@ -385,7 +477,16 @@
         const curr = main.value;
         let html = `<option value="all">所有分類</option>`;
         appData.categories.forEach(c => html += `<option value="${c.id}">${c.name}</option>`);
-        main.innerHTML = html; main.value = curr || 'all';
+        main.innerHTML = html; 
+        
+        // 嘗試保持選取狀態，如果該選項還在的話
+        if(curr && curr !== 'all') {
+             // 檢查目前的資料裡還有沒有這個 ID
+             const exists = appData.categories.find(c => c.id === curr);
+             main.value = exists ? curr : 'all';
+        } else {
+             main.value = 'all';
+        }
     }
     function filterChange() { document.getElementById('searchInput').value=''; renderProducts(); }
     function openModal(id) { document.getElementById(id).classList.add('show'); if(id==='settingsModal') renderManageList(); }
@@ -397,11 +498,10 @@
             <div class="cat-item"><div class="cat-name">${c.name}</div><div class="cat-actions"><button class="btn-text" onclick="renameCat('${c.id}')">✎</button><button class="btn-text btn-del" onclick="delCat('${c.id}')">✕</button></div></div>
         `).join('');
     }
-    function addCategory() { const n = document.getElementById('newMainCat').value; if(n){ appData.categories.push({id:'c'+Date.now(),name:n,products:[]}); document.getElementById('newMainCat').value=''; saveAll(); } }
-    function renameCat(id) { const c = appData.categories.find(x=>x.id===id); const n = prompt("新名稱:", c.name); if(n&&n.trim()){ c.name=n.trim(); saveAll(); } }
-    function delCat(id) { if(confirm("刪除分類會一併刪除產品，確定？")){ appData.categories=appData.categories.filter(c=>c.id!==id); saveAll(); } }
-    function saveAll() { localStorage.setItem('guFangData_Flat_V2', JSON.stringify(appData)); renderManageList(); renderSelects(); renderProducts(); }
-
+    function addCategory() { const n = document.getElementById('newMainCat').value; if(n){ appData.categories.push({id:'c'+Date.now(),name:n,products:[]}); document.getElementById('newMainCat').value=''; saveToCloud(appData); } }
+    function renameCat(id) { const c = appData.categories.find(x=>x.id===id); const n = prompt("新名稱:", c.name); if(n&&n.trim()){ c.name=n.trim(); saveToCloud(appData); } }
+    function delCat(id) { if(confirm("刪除分類會一併刪除產品，確定？")){ appData.categories=appData.categories.filter(c=>c.id!==id); saveToCloud(appData); } }
+    
     // --- Product CRUD ---
     function openProductModal() {
         ['pId','pName','pOutW','pInW','pPrice','pCost','sizeL','sizeW','sizeH','pDesc'].forEach(k=>document.getElementById(k).value='');
@@ -429,11 +529,21 @@
         if(!cid||!name) return alert('分類與名稱必填');
         const pid = document.getElementById('pId').value;
         const dat = { id: pid||'p'+Date.now(), name, outerWeight:document.getElementById('pOutW').value, contentWeight:document.getElementById('pInW').value, unit:document.getElementById('pUnit').value, price:document.getElementById('pPrice').value, cost:document.getElementById('pCost').value, sizeL:document.getElementById('sizeL').value, sizeW:document.getElementById('sizeW').value, sizeH:document.getElementById('sizeH').value, volume:document.getElementById('volDisplay').innerText, desc:document.getElementById('pDesc').value, img:document.getElementById('prevImg').dataset.val||'', barcode:document.getElementById('prevCode').dataset.val||'' };
+        
+        // 刪除舊的 (如果是編輯)
         if(pid) appData.categories.forEach(c=>c.products=c.products.filter(x=>x.id!==pid));
-        appData.categories.find(c=>c.id===cid).products.push(dat);
-        saveAll(); closeModal('productModal');
+        
+        // 加入新的
+        const cat = appData.categories.find(c=>c.id===cid);
+        if (cat) {
+            cat.products.push(dat);
+            saveToCloud(appData); // 儲存到雲端
+            closeModal('productModal');
+        } else {
+            alert("分類不存在，請重新整理");
+        }
     }
-    function delProd(pid, cid) { if(confirm("確定刪除？")){ const c=appData.categories.find(x=>x.id===cid); c.products=c.products.filter(x=>x.id!==pid); saveAll(); } }
+    function delProd(pid, cid) { if(confirm("確定刪除？")){ const c=appData.categories.find(x=>x.id===cid); c.products=c.products.filter(x=>x.id!==pid); saveToCloud(appData); } }
 
     // --- Helpers ---
     function calcVol() { const l=document.getElementById('sizeL').value||0, w=document.getElementById('sizeW').value||0, h=document.getElementById('sizeH').value||0; document.getElementById('volDisplay').innerText=l*w*h; }
@@ -441,7 +551,23 @@
     function setPreview(d, s) { const el=document.getElementById(d); el.innerHTML=`<img src="${s}">`; el.dataset.val=s; }
     function resetPreview(d) { const el=document.getElementById(d); el.innerHTML=`<span>上傳</span>`; delete el.dataset.val; }
     function exportData() { const a=document.createElement('a'); a.href="data:text/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(appData)); a.download='data.json'; document.body.appendChild(a); a.click(); a.remove(); }
-    function importData(i) { if(i.files[0]){ const r=new FileReader(); r.onload=e=>{ try{ appData=JSON.parse(e.target.result); saveAll(); alert("匯入成功"); }catch(z){alert("格式錯誤");}}; r.readAsText(i.files[0]); } }
+    
+    // 匯入資料也要改成儲存到雲端
+    function importData(i) { 
+        if(i.files[0]){ 
+            const r=new FileReader(); 
+            r.onload=e=>{ 
+                try{ 
+                    const newData = JSON.parse(e.target.result); 
+                    saveToCloud(newData); 
+                    alert("匯入並同步成功！"); 
+                }catch(z){
+                    alert("格式錯誤");
+                }
+            }; 
+            r.readAsText(i.files[0]); 
+        } 
+    }
     
     async function generatePDF() {
         const h = document.getElementById('pdfHead');
@@ -461,8 +587,9 @@
         const el = document.getElementById('pdf-hidden'); el.style.top='0'; el.style.left='0'; el.style.background='#fff'; el.style.zIndex='200';
         try { const cvs = await html2canvas(el, {scale:2}); const pdf = new window.jspdf.jsPDF(); pdf.addImage(cvs.toDataURL('image/jpeg'),'JPEG',0,0,pdf.internal.pageSize.getWidth(), (cvs.height*pdf.internal.pageSize.getWidth())/cvs.width); pdf.save('list.pdf'); } catch(e){alert('Error');} finally {el.style.top='-9999px';}
     }
-
-    init();
+    
+    // 初始載入等待 Firebase onSnapshot 觸發，不需要手動呼叫 init()
+    // init(); 
 </script>
 </body>
 </html>
